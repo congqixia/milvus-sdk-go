@@ -11,6 +11,7 @@ import (
 
 func TestSetFieldValue(t *testing.T) {
 	type TestStruct struct {
+		Bool  bool
 		Int8  int8
 		Int16 int16
 		Int32 int32
@@ -70,6 +71,23 @@ func TestSetFieldValue(t *testing.T) {
 	}, 0)
 	assert.Nil(t, err)
 	assert.EqualValues(t, 10, item.Int32)
+
+	i64 := reflect.ValueOf(item).Elem().FieldByName("Int64")
+	err = SetFieldValue(&entity.Field{
+		DataType: entity.FieldTypeInt64,
+	}, i64, &schema.FieldData{
+		Field: &schema.FieldData_Scalars{
+			Scalars: &schema.ScalarField{
+				Data: &schema.ScalarField_LongData{
+					LongData: &schema.LongArray{
+						Data: []int64{10},
+					},
+				},
+			},
+		},
+	}, 0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 10, item.Int64)
 
 	arr := reflect.ValueOf(item).Elem().FieldByName("Arr")
 	err = SetFieldValue(&entity.Field{
