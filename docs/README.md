@@ -10,3 +10,9 @@ Here is the list of API that `Client` will provide
 - [Load Collection](load_collection.md) load the collection for search by name
 - [Release Collection](release_collection.md) release the loaded collection by name
 
+- [Create Paritition](create_partition.md) create partition in a collection
+- [Drop Partition](drop_partition.md) drop partition from a collection
+- [Has Partition](has_partition.md) check whether specified partition exists in the collection
+- [Show Partitions](show_partitions.md) list the existing partitions of specified collection
+- [Load Partitions](load_partitions.md) load partitions of collection for search
+- [Release Partitions](release_partitions.md) release loaded partitions of a collection

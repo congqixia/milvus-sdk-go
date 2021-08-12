@@ -24,6 +24,6 @@ ctx := context.Background()
 colls, err := cli.ListCollection(ctx)
 // handles the error not nil
 for _, coll := range colls {
-// process each collections if needed
+// process each collection if needed
 }
 ```
