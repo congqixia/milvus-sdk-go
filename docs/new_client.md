@@ -4,7 +4,7 @@ This is the "Constructor" method set (there is only one for now) to obtain `Clie
 
 ## Common Params
 
-- ctx context.Context is the context to control connect process. 
+- ctx context.Context is the context to control connection process. 
 
 - addr string is the addr of the Milvus instance
 
