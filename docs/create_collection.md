@@ -16,6 +16,19 @@ API to create collection according to the schema specified
 
     - ErrClientNotReady, is the client is not connected
 
-    - error for client already exists
+    - error for collection with same name already exists
     
     - error fo API invocation failed 
+
+## Example
+
+```go
+ctx := context.Background()
+schema := &entity.Schema{
+// omit for simpliciy
+} 
+
+// cli is a valid Client instance
+err := cli.CreateCollection(ctx, schema, 1)
+// handles the error not nil
+```
