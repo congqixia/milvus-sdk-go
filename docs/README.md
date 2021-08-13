@@ -21,3 +21,7 @@ Here is the list of API that `Client` will provide
 - [Drop Index](drop_index.md) drop index from the vector field of a collection
 - [Describe index](describe_index.md) describe the index on the vector field specified
 - [Get Index Build Progress](get_index_build_progress.md) get the index building progress information
+
+- [Insert](insert.md) insert data into collection
+- [Flush](flush.md) flush inserted data
+- [Search](search.md) search in the collection with provided criterion and vectors
