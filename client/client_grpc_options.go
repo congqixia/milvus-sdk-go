@@ -44,10 +44,18 @@ type SearchQueryOption struct {
 	ConsistencyLevel   entity.ConsistencyLevel
 	GuaranteeTimestamp uint64
 	TravelTimestamp    uint64
+	Offset             int64
 }
 
 // SearchQueryOptionFunc is a function which modifies SearchOption
 type SearchQueryOptionFunc func(option *SearchQueryOption)
+
+// WithOffset specifies the offset to search/query.
+func WithOffset(offset int64) SearchQueryOptionFunc {
+	return func(option *SearchQueryOption) {
+		option.Offset = offset
+	}
+}
 
 // WithSearchQueryConsistencyLevel specifies consistency level
 func WithSearchQueryConsistencyLevel(cl entity.ConsistencyLevel) SearchQueryOptionFunc {
