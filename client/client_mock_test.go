@@ -79,6 +79,7 @@ func (s *MockSuiteBase) TearDownTest() {
 }
 
 func (s *MockSuiteBase) resetMock() {
+	s.mock.AssertExpectations(s.T())
 	MetaCache.reset()
 	if s.mock != nil {
 		s.mock.Calls = nil
@@ -146,14 +147,14 @@ func (s *MockSuiteBase) setupDescribeCollection(_ string, schema *entity.Schema)
 			Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
 			Schema: schema.ProtoMessage(),
 		}
-	}, nil)
+	}, nil).Maybe()
 }
 
 func (s *MockSuiteBase) setupDescribeCollectionError(errorCode commonpb.ErrorCode, err error) {
 	s.mock.EXPECT().DescribeCollection(mock.Anything, mock.AnythingOfType("*milvuspb.DescribeCollectionRequest")).
 		Return(&milvuspb.DescribeCollectionResponse{
 			Status: &commonpb.Status{ErrorCode: errorCode},
-		}, err)
+		}, err).Maybe()
 }
 
 func (s *MockSuiteBase) getInt64FieldData(name string, data []int64) *schemapb.FieldData {

@@ -307,20 +307,20 @@ func (c *GrpcClient) HasCollection(ctx context.Context, collName string) (bool, 
 		return false, ErrClientNotReady
 	}
 
-	req := &milvuspb.HasCollectionRequest{
+	req := &milvuspb.DescribeCollectionRequest{
 		DbName:         "", // reserved
 		CollectionName: collName,
 		TimeStamp:      0, // 0 for now
 	}
 
-	resp, err := c.Service.HasCollection(ctx, req)
+	resp, err := c.Service.DescribeCollection(ctx, req)
 	if err != nil {
 		return false, err
 	}
 	if err := handleRespStatus(resp.GetStatus()); err != nil {
-		return false, err
+		return false, nil
 	}
-	return resp.GetValue(), nil
+	return true, nil
 }
 
 // GetCollectionStatistcis show collection statistics
