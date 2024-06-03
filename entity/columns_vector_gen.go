@@ -34,6 +34,21 @@ func (c * ColumnBinaryVector) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnBinaryVector) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnBinaryVector{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		dim:		c.dim,
+		values:     c.values[start:end],
+	}
+}
+
 // Dim returns vector dimension
 func (c *ColumnBinaryVector) Dim() int {
 	return c.dim
@@ -134,6 +149,21 @@ func (c *ColumnFloatVector) Get(idx int) (interface{}, error) {
 	return c.values[idx], nil
 }
 
+func (c *ColumnFloatVector) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnFloatVector{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		dim:		c.dim,
+		values:     c.values[start:end],
+	}
+}
+
 // AppendValue append value into column
 func(c *ColumnFloatVector) AppendValue(i interface{}) error {
 	v, ok := i.([]float32)
@@ -208,6 +238,21 @@ func (c *ColumnFloat16Vector) Type() FieldType {
 // Len returns column data length
 func (c * ColumnFloat16Vector) Len() int {
 	return len(c.values)
+}
+
+func (c *ColumnFloat16Vector) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnFloat16Vector{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		dim:		c.dim,
+		values:     c.values[start:end],
+	}
 }
 
 // Dim returns vector dimension
@@ -295,6 +340,21 @@ func (c *ColumnBFloat16Vector) Type() FieldType {
 // Len returns column data length
 func (c * ColumnBFloat16Vector) Len() int {
 	return len(c.values)
+}
+
+func (c *ColumnBFloat16Vector) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnBFloat16Vector{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		dim:		c.dim,
+		values:     c.values[start:end],
+	}
 }
 
 // Dim returns vector dimension

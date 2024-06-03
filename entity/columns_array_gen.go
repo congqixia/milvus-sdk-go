@@ -33,6 +33,20 @@ func (c *ColumnBoolArray) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnBoolArray) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnBoolArray{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
+}
+
 // Get returns value at index as interface{}.
 func (c *ColumnBoolArray) Get(idx int) (interface{}, error) {
 	var r []bool // use default value
@@ -130,6 +144,20 @@ func (c *ColumnInt8Array) Type() FieldType {
 // Len returns column values length
 func (c *ColumnInt8Array) Len() int {
 	return len(c.values)
+}
+
+func (c *ColumnInt8Array) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnInt8Array{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
 }
 
 // Get returns value at index as interface{}.
@@ -231,6 +259,20 @@ func (c *ColumnInt16Array) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnInt16Array) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnInt16Array{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
+}
+
 // Get returns value at index as interface{}.
 func (c *ColumnInt16Array) Get(idx int) (interface{}, error) {
 	var r []int16 // use default value
@@ -328,6 +370,20 @@ func (c *ColumnInt32Array) Type() FieldType {
 // Len returns column values length
 func (c *ColumnInt32Array) Len() int {
 	return len(c.values)
+}
+
+func (c *ColumnInt32Array) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnInt32Array{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
 }
 
 // Get returns value at index as interface{}.
@@ -429,6 +485,20 @@ func (c *ColumnInt64Array) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnInt64Array) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnInt64Array{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
+}
+
 // Get returns value at index as interface{}.
 func (c *ColumnInt64Array) Get(idx int) (interface{}, error) {
 	var r []int64 // use default value
@@ -528,6 +598,20 @@ func (c *ColumnFloatArray) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnFloatArray) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnFloatArray{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
+}
+
 // Get returns value at index as interface{}.
 func (c *ColumnFloatArray) Get(idx int) (interface{}, error) {
 	var r []float32 // use default value
@@ -625,6 +709,20 @@ func (c *ColumnDoubleArray) Type() FieldType {
 // Len returns column values length
 func (c *ColumnDoubleArray) Len() int {
 	return len(c.values)
+}
+
+func (c *ColumnDoubleArray) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnDoubleArray{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
 }
 
 // Get returns value at index as interface{}.

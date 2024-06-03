@@ -116,7 +116,7 @@ func TestUpsertAutoID(t *testing.T) {
 	// upsert with pks
 	pkColumn := entity.NewColumnInt64(common.DefaultIntFieldName, ids.(*entity.ColumnInt64).Data()[:100])
 	_, err = mc.Upsert(ctx, collName, "", pkColumn, floatColumn1, vecColumn1)
-	common.CheckErr(t, err, false, "the number of fields is less than needed")
+	common.CheckErr(t, err, false, "upsert can not assign primary field data when auto id enabled")
 }
 
 func TestUpsertVarcharPk(t *testing.T) {
@@ -224,11 +224,11 @@ func TestUpsertNotExistCollectionPartition(t *testing.T) {
 	// upsert not exist partition
 	_, floatColumn, vecColumn := common.GenDefaultColumnData(0, common.DefaultNb, common.DefaultDim)
 	_, errUpsert := mc.Upsert(ctx, collName, "aaa", floatColumn, vecColumn)
-	common.CheckErr(t, errUpsert, false, "does not exist")
+	common.CheckErr(t, errUpsert, false, "can not assign primary field data when auto id enabled")
 
 	// upsert not exist collection
 	_, errUpsert = mc.Upsert(ctx, "aaa", "", floatColumn, vecColumn)
-	common.CheckErr(t, errUpsert, false, "does not exist")
+	common.CheckErr(t, errUpsert, false, "can't find collection")
 }
 
 // test upsert with invalid column data

@@ -43,6 +43,9 @@ type Client interface {
 	CreateDatabase(ctx context.Context, dbName string, opts ...CreateDatabaseOption) error
 	// DropDatabase drop database with the given db name.
 	DropDatabase(ctx context.Context, dbName string, opts ...DropDatabaseOption) error
+	// AlterDatabase alter database props with given db name.
+	AlterDatabase(ctx context.Context, collName string, attrs ...entity.DatabaseAttribute) error
+	DescribeDatabase(ctx context.Context, dbName string) (*entity.Database, error)
 
 	// -- collection --
 
@@ -147,6 +150,8 @@ type Client interface {
 	Query(ctx context.Context, collectionName string, partitionNames []string, expr string, outputFields []string, opts ...SearchQueryOptionFunc) (ResultSet, error)
 	// Get grabs the inserted entities using the primary key from the Collection.
 	Get(ctx context.Context, collectionName string, ids entity.Column, opts ...GetOption) (ResultSet, error)
+	// QueryIterator returns data matches provided criterion in iterator mode.
+	QueryIterator(ctx context.Context, opt *QueryIteratorOption) (*QueryIterator, error)
 
 	// CalcDistance calculate the distance between vectors specified by ids or provided
 	CalcDistance(ctx context.Context, collName string, partitions []string,
@@ -188,7 +193,15 @@ type Client interface {
 	ListRoles(ctx context.Context) ([]entity.Role, error)
 	// ListUsers lists the user objects in system.
 	ListUsers(ctx context.Context) ([]entity.User, error)
-	// Grant adds object privileged for role.
+	// DescribeUser describes specific user attributes in the system
+	DescribeUser(ctx context.Context, username string) (entity.UserDescription, error)
+	// DescribeUsers describe all users attributes in the system
+	DescribeUsers(ctx context.Context) ([]entity.UserDescription, error)
+	// ListGrant lists a grant info for the role and the specific object
+	ListGrant(ctx context.Context, role string, object string, objectName string, dbName string) ([]entity.RoleGrants, error)
+	// ListGrants lists all assigned privileges and objects for the role.
+	ListGrants(ctx context.Context, role string, dbName string) ([]entity.RoleGrants, error)
+	// Grant adds privilege for role.
 	Grant(ctx context.Context, role string, objectType entity.PriviledgeObjectType, object string) error
 	// Revoke removes privilege from role.
 	Revoke(ctx context.Context, role string, objectType entity.PriviledgeObjectType, object string) error

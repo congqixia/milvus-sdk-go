@@ -1,13 +1,15 @@
-//go:build L0
+///go:build L0
 
 package testcases
 
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -163,11 +165,11 @@ func TestSearchEmptyCollection(t *testing.T) {
 
 		// search vector
 		sp, _ := entity.NewIndexHNSWSearchParam(74)
-		searchRes, _ := mc.Search(
+		searchRes, errSearch := mc.Search(
 			ctx, collName,
 			[]string{common.DefaultPartition},
 			"",
-			[]string{common.DefaultFloatFieldName},
+			[]string{"*"},
 			//[]entity.Vector{entity.FloatVector([]float32{0.1, 0.2})},
 			common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeFloatVector),
 			common.DefaultFloatVecFieldName,
@@ -175,7 +177,44 @@ func TestSearchEmptyCollection(t *testing.T) {
 			common.DefaultTopK,
 			sp,
 		)
-		require.Len(t, searchRes, 0)
+		common.CheckErr(t, errSearch, true)
+		common.CheckSearchResult(t, searchRes, common.DefaultNq, 0)
+	}
+}
+
+func TestSearchEmptyCollection2(t *testing.T) {
+	ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+	// connect
+	mc := createMilvusClient(ctx, t)
+
+	// create -> insert [0, 3000) -> flush -> index -> load
+	cp := CollectionParams{CollectionFieldsType: AllFields, AutoID: false, EnableDynamicField: true,
+		ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+	dp := DataParams{DoInsert: false}
+
+	// index params
+	ips := GenDefaultIndexParamsForAllVectors()
+	collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+
+	// search
+	type mNameVec struct {
+		fieldName  string
+		metricType entity.MetricType
+		queryVec   []entity.Vector
+	}
+	nameVecs := []mNameVec{
+		{fieldName: common.DefaultFloatVecFieldName, metricType: entity.L2, queryVec: common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeFloatVector)},
+		{fieldName: common.DefaultFloat16VecFieldName, metricType: entity.L2, queryVec: common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeFloat16Vector)},
+		{fieldName: common.DefaultBFloat16VecFieldName, metricType: entity.L2, queryVec: common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeBFloat16Vector)},
+		{fieldName: common.DefaultBinaryVecFieldName, metricType: entity.JACCARD, queryVec: common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeBinaryVector)},
+	}
+	sp, _ := entity.NewIndexHNSWSearchParam(100)
+	for _, nv := range nameVecs {
+		resSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, nv.queryVec, nv.fieldName,
+			nv.metricType, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		common.CheckSearchResult(t, resSearch, common.DefaultNq, 0)
 	}
 }
 
@@ -235,8 +274,6 @@ func TestSearchEmptyPartitions(t *testing.T) {
 		nq0IDs := searchResult[0].IDs.(*entity.ColumnInt64).Data()
 		nq1IDs := searchResult[1].IDs.(*entity.ColumnInt64).Data()
 		common.CheckSearchResult(t, searchResult, 2, common.DefaultTopK)
-		log.Println(nq0IDs)
-		log.Println(nq1IDs)
 		require.Contains(t, nq0IDs, vecColumnDefault.IdsColumn.(*entity.ColumnInt64).Data()[0])
 		require.Contains(t, nq1IDs, vecColumnPartition.IdsColumn.(*entity.ColumnInt64).Data()[0])
 	}
@@ -645,7 +682,7 @@ func TestSearchInvalidVectors(t *testing.T) {
 			ctx, collName,
 			[]string{},
 			"",
-			[]string{common.DefaultIntFieldName},
+			[]string{"*"},
 			invalidVector.vectors,
 			common.DefaultFloatVecFieldName,
 			entity.L2,
@@ -1151,7 +1188,10 @@ func TestSearchArrayFieldExpr(t *testing.T) {
 			sp,
 		)
 		common.CheckErr(t, errSearchEmpty, true)
-		require.Empty(t, searchRes)
+		require.Len(t, searchRes, common.DefaultNq)
+		for _, resultSet := range searchRes {
+			assert.EqualValues(t, 0, resultSet.ResultCount)
+		}
 	}
 }
 
@@ -1318,6 +1358,7 @@ func TestRangeSearchScannL2(t *testing.T) {
 
 // test range search with scann index and IP COSINE metric type
 func TestRangeSearchScannIPCosine(t *testing.T) {
+	t.Skip("https://github.com/milvus-io/milvus/issues/32608")
 	t.Parallel()
 	for _, metricType := range []entity.MetricType{entity.IP, entity.COSINE} {
 		ctx := createContext(t, time.Second*common.DefaultTimeout)
@@ -1331,7 +1372,7 @@ func TestRangeSearchScannIPCosine(t *testing.T) {
 
 		// insert
 		dp := DataParams{CollectionName: collName, PartitionName: "", CollectionFieldsType: Int64FloatVecJSON,
-			start: 0, nb: common.DefaultNb, dim: common.DefaultDim, EnableDynamicField: true, WithRows: false}
+			start: 0, nb: common.DefaultNb * 4, dim: common.DefaultDim, EnableDynamicField: true, WithRows: false}
 		_, _ = insertData(ctx, t, mc, dp)
 		mc.Flush(ctx, collName, false)
 
@@ -1352,25 +1393,46 @@ func TestRangeSearchScannIPCosine(t *testing.T) {
 		// range search filter distance and output all fields
 		queryVec := common.GenSearchVectors(1, common.DefaultDim, entity.FieldTypeFloatVector)
 		sp, _ := entity.NewIndexSCANNSearchParam(8, 20)
-		sp.AddRadius(0)
-		sp.AddRangeFilter(100)
+
+		// search without range
 		resSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultFloatVecFieldName,
+			metricType, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		for _, s := range resSearch[0].Scores {
+			log.Println(s)
+		}
+
+		// range search
+		var radius float64
+		var rangeFilter float64
+		if metricType == entity.COSINE {
+			radius = 10
+			rangeFilter = 50
+		}
+		if metricType == entity.IP {
+			radius = 0.2
+			rangeFilter = 0.8
+		}
+		sp.AddRadius(radius)
+		sp.AddRangeFilter(rangeFilter)
+		resRange, errRange := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultFloatVecFieldName,
 			metricType, common.DefaultTopK, sp)
 
 		// verify error nil, output all fields, range score
-		common.CheckErr(t, errSearch, true)
-		common.CheckSearchResult(t, resSearch, 1, common.DefaultTopK)
-		common.CheckOutputFields(t, resSearch[0].Fields, []string{common.DefaultIntFieldName, common.DefaultFloatFieldName,
+		common.CheckErr(t, errRange, true)
+		common.CheckSearchResult(t, resRange, 1, common.DefaultTopK)
+		common.CheckOutputFields(t, resRange[0].Fields, []string{common.DefaultIntFieldName, common.DefaultFloatFieldName,
 			common.DefaultJSONFieldName, common.DefaultFloatVecFieldName, common.DefaultDynamicFieldName})
 		for _, s := range resSearch[0].Scores {
-			require.GreaterOrEqual(t, s, float32(0))
-			require.Less(t, s, float32(100))
+			log.Println(s)
+			require.GreaterOrEqual(t, s, float32(radius))
+			require.Less(t, s, float32(rangeFilter))
 		}
 
 		// invalid range search: radius > range filter
 		sp.AddRadius(20)
 		sp.AddRangeFilter(10)
-		_, errRange := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultFloatVecFieldName,
+		_, errRange = mc.Search(ctx, collName, []string{}, "", []string{""}, queryVec, common.DefaultFloatVecFieldName,
 			metricType, common.DefaultTopK, sp)
 		common.CheckErr(t, errRange, false, "must be greater than radius")
 	}
@@ -1432,7 +1494,7 @@ func TestRangeSearchScannBinary(t *testing.T) {
 		sp.AddRangeFilter(100)
 		_, errRange := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultBinaryVecFieldName,
 			metricType, common.DefaultTopK, sp)
-		common.CheckErr(t, errRange, false, "range_filter(100.000000) must be less than radius(0.000000)")
+		common.CheckErr(t, errRange, false, "range_filter(100) must be less than radius(0)")
 	}
 }
 
@@ -1551,7 +1613,228 @@ func TestSearchMultiVectors(t *testing.T) {
 		}
 		// TODO iterator search
 	}
+}
 
+func TestSearchSparseVector(t *testing.T) {
+	t.Parallel()
+	idxInverted := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_INVERTED_INDEX", map[string]string{"drop_ratio_build": "0.2", "metric_type": "IP"})
+	idxWand := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_WAND", map[string]string{"drop_ratio_build": "0.3", "metric_type": "IP"})
+	for _, idx := range []entity.Index{idxInverted, idxWand} {
+		ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+		// connect
+		mc := createMilvusClient(ctx, t)
+
+		// create -> insert [0, 3000) -> flush -> index -> load
+		cp := CollectionParams{CollectionFieldsType: Int64VarcharSparseVec, AutoID: false, EnableDynamicField: true,
+			ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+		dp := DataParams{DoInsert: true, CollectionFieldsType: Int64VarcharSparseVec, start: 0, nb: common.DefaultNb * 4,
+			dim: common.DefaultDim, EnableDynamicField: true}
+
+		// index params
+		idxHnsw, _ := entity.NewIndexHNSW(entity.L2, 8, 96)
+		ips := []IndexParams{
+			{BuildIndex: true, Index: idx, FieldName: common.DefaultSparseVecFieldName, async: false},
+			{BuildIndex: true, Index: idxHnsw, FieldName: common.DefaultFloatVecFieldName, async: false},
+		}
+		collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+
+		// search
+		queryVec := common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeSparseVector)
+		sp, _ := entity.NewIndexSparseInvertedSearchParam(0.2)
+		resSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		require.Len(t, resSearch, common.DefaultNq)
+		outputFields := []string{common.DefaultIntFieldName, common.DefaultVarcharFieldName, common.DefaultFloatVecFieldName,
+			common.DefaultSparseVecFieldName, common.DefaultDynamicFieldName}
+		for _, res := range resSearch {
+			require.LessOrEqual(t, res.ResultCount, common.DefaultTopK)
+			if res.ResultCount == common.DefaultTopK {
+				common.CheckOutputFields(t, resSearch[0].Fields, outputFields)
+			}
+		}
+	}
+}
+
+// test search with invalid sparse vector
+func TestSearchInvalidSparseVector(t *testing.T) {
+	t.Skip("https://github.com/milvus-io/milvus/issues/32368")
+	t.Parallel()
+	idxInverted := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_INVERTED_INDEX", map[string]string{"drop_ratio_build": "0.2", "metric_type": "IP"})
+	idxWand := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_WAND", map[string]string{"drop_ratio_build": "0.3", "metric_type": "IP"})
+	for _, idx := range []entity.Index{idxInverted, idxWand} {
+		ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+		// connect
+		mc := createMilvusClient(ctx, t)
+
+		// create -> insert [0, 3000) -> flush -> index -> load
+		cp := CollectionParams{CollectionFieldsType: Int64VarcharSparseVec, AutoID: false, EnableDynamicField: true,
+			ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+		dp := DataParams{DoInsert: true, CollectionFieldsType: Int64VarcharSparseVec, start: 0, nb: common.DefaultNb,
+			dim: common.DefaultDim, EnableDynamicField: true}
+
+		// index params
+		idxHnsw, _ := entity.NewIndexHNSW(entity.L2, 8, 96)
+		ips := []IndexParams{
+			{BuildIndex: true, Index: idx, FieldName: common.DefaultSparseVecFieldName, async: false},
+			{BuildIndex: true, Index: idxHnsw, FieldName: common.DefaultFloatVecFieldName, async: false},
+		}
+		collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+		sp, _ := entity.NewIndexSparseInvertedSearchParam(0)
+
+		_, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, []entity.Vector{}, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, false, "nq (number of search vector per search request) should be in range [1, 16384]")
+
+		vector1, err := entity.NewSliceSparseEmbedding([]uint32{}, []float32{})
+		common.CheckErr(t, err, true)
+		searchRes, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, []entity.Vector{vector1}, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		common.CheckSearchResult(t, searchRes, 1, 0)
+
+		positions := make([]uint32, 100)
+		values := make([]float32, 100)
+		for i := 0; i < 100; i++ {
+			positions[i] = uint32(1)
+			values[i] = rand.Float32()
+		}
+		vector, _ := entity.NewSliceSparseEmbedding(positions, values)
+		_, errSearch1 := mc.Search(ctx, collName, []string{}, "", []string{"*"}, []entity.Vector{vector}, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch1, false, "unsorted or same indices in sparse float vector")
+	}
+}
+
+func TestSearchEmptySparseCollection(t *testing.T) {
+	t.Parallel()
+	idxInverted := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_INVERTED_INDEX", map[string]string{"drop_ratio_build": "0.2", "metric_type": "IP"})
+	for _, idx := range []entity.Index{idxInverted} {
+		ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+		// connect
+		mc := createMilvusClient(ctx, t)
+
+		// create -> insert [0, 3000) -> flush -> index -> load
+		cp := CollectionParams{CollectionFieldsType: Int64VarcharSparseVec, AutoID: false, EnableDynamicField: true,
+			ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+		dp := DataParams{DoInsert: false}
+
+		// index params
+		idxHnsw, _ := entity.NewIndexHNSW(entity.L2, 8, 96)
+		ips := []IndexParams{
+			{BuildIndex: true, Index: idx, FieldName: common.DefaultSparseVecFieldName, async: false},
+			{BuildIndex: true, Index: idxHnsw, FieldName: common.DefaultFloatVecFieldName, async: false},
+		}
+		collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+
+		// search
+		sp, _ := entity.NewIndexSparseInvertedSearchParam(0)
+		queryVec := common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeSparseVector)
+		resSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		common.CheckSearchResult(t, resSearch, common.DefaultNq, 0)
+	}
+}
+
+func TestSearchSparseVectorPagination(t *testing.T) {
+	t.Parallel()
+	idxInverted, _ := entity.NewIndexSparseInverted(entity.IP, 0.2)
+	idxWand, _ := entity.NewIndexSparseWAND(entity.IP, 0.2)
+	for _, idx := range []entity.Index{idxInverted, idxWand} {
+		ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+		// connect
+		mc := createMilvusClient(ctx, t)
+
+		// create -> insert [0, 3000) -> flush -> index -> load
+		cp := CollectionParams{CollectionFieldsType: Int64VarcharSparseVec, AutoID: false, EnableDynamicField: true,
+			ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+		dp := DataParams{DoInsert: true, CollectionFieldsType: Int64VarcharSparseVec, start: 0, nb: common.DefaultNb * 4,
+			dim: common.DefaultDim, EnableDynamicField: true}
+
+		// index params
+		idxHnsw, _ := entity.NewIndexHNSW(entity.L2, 8, 96)
+		ips := []IndexParams{
+			{BuildIndex: true, Index: idx, FieldName: common.DefaultSparseVecFieldName, async: false},
+			{BuildIndex: true, Index: idxHnsw, FieldName: common.DefaultFloatVecFieldName, async: false},
+		}
+		collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+
+		// search
+		queryVec := common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeSparseVector)
+		sp, _ := entity.NewIndexSparseInvertedSearchParam(0.2)
+		resSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+			entity.IP, common.DefaultTopK, sp)
+		common.CheckErr(t, errSearch, true)
+		require.Len(t, resSearch, common.DefaultNq)
+
+		pageSearch, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+			entity.IP, 5, sp, client.WithOffset(5))
+		common.CheckErr(t, errSearch, true)
+		require.Len(t, pageSearch, common.DefaultNq)
+		for i := 0; i < len(resSearch); i++ {
+			if resSearch[i].ResultCount == common.DefaultTopK && pageSearch[i].ResultCount == 5 {
+				require.Equal(t, resSearch[i].IDs.(*entity.ColumnInt64).Data()[5:], pageSearch[i].IDs.(*entity.ColumnInt64).Data())
+			}
+		}
+	}
+}
+
+// test sparse vector unsupported search: TODO iterator search
+func TestSearchSparseVectorNotSupported(t *testing.T) {
+	t.Skip("Go-sdk support iterator search in progress")
+}
+
+func TestRangeSearchSparseVector(t *testing.T) {
+	ctx := createContext(t, time.Second*common.DefaultTimeout*2)
+	// connect
+	mc := createMilvusClient(ctx, t)
+
+	// create -> insert [0, 3000) -> flush -> index -> load
+	cp := CollectionParams{CollectionFieldsType: Int64VarcharSparseVec, AutoID: false, EnableDynamicField: true,
+		ShardsNum: common.DefaultShards, Dim: common.DefaultDim, MaxLength: common.TestMaxLen}
+
+	dp := DataParams{DoInsert: true, CollectionFieldsType: Int64VarcharSparseVec, start: 0, nb: common.DefaultNb * 4,
+		dim: common.DefaultDim, EnableDynamicField: true}
+
+	// index params
+	idxHnsw, _ := entity.NewIndexHNSW(entity.L2, 8, 96)
+	idxWand := entity.NewGenericIndex(common.DefaultSparseVecFieldName, "SPARSE_WAND", map[string]string{"drop_ratio_build": "0.1", "metric_type": "IP"})
+	ips := []IndexParams{
+		{BuildIndex: true, Index: idxWand, FieldName: common.DefaultSparseVecFieldName, async: false},
+		{BuildIndex: true, Index: idxHnsw, FieldName: common.DefaultFloatVecFieldName, async: false},
+	}
+	collName := prepareCollection(ctx, t, mc, cp, WithDataParams(dp), WithIndexParams(ips), WithCreateOption(client.WithConsistencyLevel(entity.ClStrong)))
+
+	// range search
+	queryVec := common.GenSearchVectors(common.DefaultNq, common.DefaultDim, entity.FieldTypeSparseVector)
+	sp, _ := entity.NewIndexSparseInvertedSearchParam(0.3)
+
+	// without range
+	resRange, errSearch := mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+		entity.IP, common.DefaultTopK, sp)
+	common.CheckErr(t, errSearch, true)
+	require.Len(t, resRange, common.DefaultNq)
+	for _, res := range resRange {
+		log.Println(res.Scores)
+	}
+
+	sp.AddRadius(0)
+	sp.AddRangeFilter(0.8)
+	resRange, errSearch = mc.Search(ctx, collName, []string{}, "", []string{"*"}, queryVec, common.DefaultSparseVecFieldName,
+		entity.IP, common.DefaultTopK, sp)
+	common.CheckErr(t, errSearch, true)
+	require.Len(t, resRange, common.DefaultNq)
+	for _, res := range resRange {
+		for _, s := range res.Scores {
+			require.GreaterOrEqual(t, s, float32(0))
+			require.Less(t, s, float32(0.8))
+		}
+	}
 }
 
 // TODO offset and limit

@@ -34,6 +34,8 @@ const (
 	ignoreGrowingKey = `ignore_growing`
 	forTuningKey     = `for_tuning`
 	groupByKey       = `group_by_field`
+	iteratorKey      = `iterator`
+	reduceForBestKey = `reduce_stop_for_best`
 )
 
 func (c *GrpcClient) HybridSearch(ctx context.Context, collName string, partitions []string, limit int, outputFields []string, reranker Reranker, subRequests []*ANNSearchRequest, opts ...SearchQueryOptionFunc) ([]SearchResult, error) {
@@ -49,6 +51,7 @@ func (c *GrpcClient) HybridSearch(ctx context.Context, collName string, partitio
 			return nil, err
 		}
 		schema = coll.Schema
+		collInfo, _ = MetaCache.getCollectionInfo(collName)
 	} else {
 		schema = collInfo.Schema
 	}
@@ -67,8 +70,13 @@ func (c *GrpcClient) HybridSearch(ctx context.Context, collName string, partitio
 		sReqs = append(sReqs, r)
 	}
 
+	opt := &SearchQueryOption{}
+	for _, o := range opts {
+		o(opt)
+	}
 	params := reranker.GetParams()
 	params = append(params, &commonpb.KeyValuePair{Key: limitKey, Value: strconv.FormatInt(int64(limit), 10)})
+	params = append(params, &commonpb.KeyValuePair{Key: offsetKey, Value: strconv.FormatInt(int64(opt.Offset), 10)})
 
 	req := &milvuspb.HybridSearchRequest{
 		CollectionName:   collName,
@@ -143,25 +151,20 @@ func (c *GrpcClient) handleSearchResult(schema *entity.Schema, outputFields []st
 			Scores:      results.GetScores()[offset : offset+rc],
 		}
 
-		// parse result set if current nq is not empty
-		if rc > 0 {
-			entry.IDs, entry.Err = entity.IDColumns(results.GetIds(), offset, offset+rc)
+		entry.IDs, entry.Err = entity.IDColumns(schema, results.GetIds(), offset, offset+rc)
+		if entry.Err != nil {
+			continue
+		}
+		// parse group-by values
+		if gb != nil {
+			entry.GroupByValue, entry.Err = entity.FieldDataColumn(gb, offset, offset+rc)
 			if entry.Err != nil {
 				offset += rc
 				continue
 			}
-			// parse group-by values
-			if gb != nil {
-				entry.GroupByValue, entry.Err = entity.FieldDataColumn(gb, offset, offset+rc)
-				if entry.Err != nil {
-					offset += rc
-					continue
-				}
-			}
-			// entry.GroupByValue, entry.Err = c.parseSearchResult()
-			entry.Fields, entry.Err = c.parseSearchResult(schema, outputFields, fieldDataList, i, offset, offset+rc)
-			sr = append(sr, entry)
 		}
+		entry.Fields, entry.Err = c.parseSearchResult(schema, outputFields, fieldDataList, i, offset, offset+rc)
+		sr = append(sr, entry)
 
 		offset += rc
 	}
@@ -351,6 +354,12 @@ func (c *GrpcClient) Query(ctx context.Context, collectionName string, partition
 	if option.IgnoreGrowing {
 		req.QueryParams = append(req.QueryParams, &commonpb.KeyValuePair{Key: ignoreGrowingKey, Value: strconv.FormatBool(option.IgnoreGrowing)})
 	}
+	if option.isIterator {
+		req.QueryParams = append(req.QueryParams, &commonpb.KeyValuePair{Key: iteratorKey, Value: strconv.FormatBool(true)})
+	}
+	if option.reduceForBest {
+		req.QueryParams = append(req.QueryParams, &commonpb.KeyValuePair{Key: reduceForBestKey, Value: strconv.FormatBool(true)})
+	}
 
 	resp, err := c.Service.Query(ctx, req)
 	if err != nil {
@@ -399,7 +408,7 @@ func prepareSearchRequest(collName string, partitions []string,
 		return nil, err
 	}
 
-	searchParams := entity.MapKvPairs(map[string]string{
+	spMap := map[string]string{
 		"anns_field":     vectorField,
 		"topk":           fmt.Sprintf("%d", topK),
 		"params":         string(bs),
@@ -408,7 +417,11 @@ func prepareSearchRequest(collName string, partitions []string,
 		ignoreGrowingKey: strconv.FormatBool(opt.IgnoreGrowing),
 		offsetKey:        fmt.Sprintf("%d", opt.Offset),
 		groupByKey:       opt.GroupByField,
-	})
+	}
+	if opt.GroupByField != "" {
+		spMap[groupByKey] = opt.GroupByField
+	}
+	searchParams := entity.MapKvPairs(spMap)
 
 	req := &milvuspb.SearchRequest{
 		DbName:             "",

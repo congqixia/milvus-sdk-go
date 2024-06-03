@@ -29,6 +29,20 @@ func (c *ColumnVarCharArray) Len() int {
 	return len(c.values)
 }
 
+func (c *ColumnVarCharArray) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnVarCharArray{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		values:     c.values[start:end],
+	}
+}
+
 // Get returns value at index as interface{}.
 func (c *ColumnVarCharArray) Get(idx int) (interface{}, error) {
 	var r []string // use default value

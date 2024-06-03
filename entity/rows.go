@@ -389,6 +389,10 @@ func AnyToColumns(rows []interface{}, schemas ...*Schema) ([]Column, error) {
 			}
 			col := NewColumnBFloat16Vector(field.Name, int(dim), data)
 			nameColumns[field.Name] = col
+		case FieldTypeSparseVector:
+			data := make([]SparseEmbedding, 0, rowsLen)
+			col := NewColumnSparseVectors(field.Name, data)
+			nameColumns[field.Name] = col
 		}
 	}
 
@@ -545,7 +549,7 @@ func reflectValueCandi(v reflect.Value) (map[string]fieldCandi, error) {
 
 			v := v.Field(i)
 			if v.Kind() == reflect.Array {
-				v = v.Slice(0, v.Len()-1)
+				v = v.Slice(0, v.Len())
 			}
 
 			result[name] = fieldCandi{

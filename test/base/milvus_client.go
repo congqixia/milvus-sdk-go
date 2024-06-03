@@ -119,6 +119,20 @@ func (mc *MilvusClient) DropDatabase(ctx context.Context, dbName string) error {
 	return err
 }
 
+func (mc *MilvusClient) AlterDatabase(ctx context.Context, dbName string, dbAttrs ...entity.DatabaseAttribute) error {
+	preRequest("AlterDatabase", ctx, dbName)
+	err := mc.mClient.AlterDatabase(ctx, dbName, dbAttrs...)
+	postResponse("AlterDatabase", err)
+	return err
+}
+
+func (mc *MilvusClient) DescribeDatabase(ctx context.Context, dbName string) (*entity.Database, error) {
+	preRequest("DescribeDatabase", ctx, dbName)
+	db, err := mc.mClient.DescribeDatabase(ctx, dbName)
+	postResponse("DescribeDatabase", err, db)
+	return db, err
+}
+
 // -- collection --
 
 // CreateCollection Create Collection
@@ -196,6 +210,14 @@ func (mc *MilvusClient) HasCollection(ctx context.Context, collName string) (boo
 	has, err := mc.mClient.HasCollection(ctx, collName)
 	postResponse("HasCollection", err, has)
 	return has, err
+}
+
+// AlterCollection changes collection attributes
+func (mc *MilvusClient) AlterCollection(ctx context.Context, collName string, attrs ...entity.CollectionAttribute) error {
+	preRequest("AlterCollection", ctx, collName)
+	err := mc.mClient.AlterCollection(ctx, collName, attrs...)
+	postResponse("AlterCollection", err)
+	return err
 }
 
 // -- alias --
@@ -356,6 +378,14 @@ func (mc *MilvusClient) GetIndexState(ctx context.Context, collName string, fiel
 	return indexState, err
 }
 
+// AlterIndex modifies the index params.
+func (mc *MilvusClient) AlterIndex(ctx context.Context, collName string, indexName string, opts ...client.IndexOption) error {
+	preRequest("AlterIndex", ctx, collName, indexName, opts)
+	err := mc.mClient.AlterIndex(ctx, collName, indexName, opts...)
+	postResponse("AlterIndex", err)
+	return err
+}
+
 // -- basic operation --
 
 // Insert insert data
@@ -411,11 +441,12 @@ func (mc *MilvusClient) Search(ctx context.Context, collName string, partitions 
 }
 
 func (mc *MilvusClient) HybridSearch(ctx context.Context, collName string, partitions []string, limit int, outputFields []string,
-	reranker client.Reranker, subRequests []*client.ANNSearchRequest) ([]client.SearchResult, error) {
+	reranker client.Reranker, subRequests []*client.ANNSearchRequest, opts ...client.SearchQueryOptionFunc,
+) ([]client.SearchResult, error) {
 	funcName := "HybridSearch"
-	preRequest(funcName, ctx, collName, partitions, limit, outputFields, reranker, subRequests)
+	preRequest(funcName, ctx, collName, partitions, limit, outputFields, reranker, subRequests, opts)
 
-	searchResult, err := mc.mClient.HybridSearch(ctx, collName, partitions, limit, outputFields, reranker, subRequests)
+	searchResult, err := mc.mClient.HybridSearch(ctx, collName, partitions, limit, outputFields, reranker, subRequests, opts...)
 	postResponse(funcName, err, searchResult)
 
 	return searchResult, err
@@ -423,7 +454,8 @@ func (mc *MilvusClient) HybridSearch(ctx context.Context, collName string, parti
 
 // QueryByPks query from collection
 func (mc *MilvusClient) QueryByPks(ctx context.Context, collName string, partitions []string, ids entity.Column,
-	outputFields []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+	outputFields []string, opts ...client.SearchQueryOptionFunc,
+) (client.ResultSet, error) {
 	funcName := "QueryByPks"
 	preRequest(funcName, ctx, collName, partitions, ids, outputFields, opts)
 

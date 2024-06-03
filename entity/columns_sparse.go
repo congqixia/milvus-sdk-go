@@ -63,7 +63,7 @@ func (e sliceSparseEmbedding) Serialize() []byte {
 	for idx := 0; idx < e.Len(); idx++ {
 		pos, value, _ := e.Get(idx)
 		binary.LittleEndian.PutUint32(row[idx*8:], pos)
-		binary.LittleEndian.PutUint32(row[pos*8+4:], math.Float32bits(value))
+		binary.LittleEndian.PutUint32(row[idx*8+4:], math.Float32bits(value))
 	}
 	return row
 }
@@ -141,6 +141,20 @@ func (c *ColumnSparseFloatVector) Type() FieldType {
 // Len returns column values length.
 func (c *ColumnSparseFloatVector) Len() int {
 	return len(c.vectors)
+}
+
+func (c *ColumnSparseFloatVector) Slice(start, end int) Column {
+	if start > c.Len() {
+		start = c.Len()
+	}
+	if end == -1 || end > c.Len() {
+		end = c.Len()
+	}
+	return &ColumnSparseFloatVector{
+		ColumnBase: c.ColumnBase,
+		name:       c.name,
+		vectors:    c.vectors[start:end],
+	}
 }
 
 // Get returns value at index as interface{}.

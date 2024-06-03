@@ -347,6 +347,282 @@ func (s *RBACSuite) TestListUser() {
 	})
 }
 
+func (s *RBACSuite) TestDescribeUser() {
+	ctx := context.Background()
+	userName := "testUser"
+
+	s.Run("normal run", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Run(func(ctx context.Context, req *milvuspb.SelectUserRequest) {
+			s.True(req.GetIncludeRoleInfo())
+			s.Equal(req.GetUser().GetName(), userName)
+		}).Return(&milvuspb.SelectUserResponse{
+			Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
+			Results: []*milvuspb.UserResult{
+				{
+					User: &milvuspb.UserEntity{
+						Name: userName,
+					},
+					Roles: []*milvuspb.RoleEntity{
+						{Name: "role1"},
+						{Name: "role2"},
+					},
+				},
+			},
+		}, nil)
+
+		userDesc, err := s.client.DescribeUser(ctx, userName)
+
+		s.NoError(err)
+		s.Equal(userDesc.Name, userName)
+		s.ElementsMatch(userDesc.Roles, []string{"role1", "role2"})
+	})
+
+	s.Run("rpc error", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Return(nil, errors.New("mock error"))
+
+		_, err := s.client.DescribeUser(ctx, userName)
+		s.Error(err)
+	})
+
+	s.Run("status error", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Return(&milvuspb.SelectUserResponse{
+			Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError},
+		}, nil)
+
+		_, err := s.client.DescribeUser(ctx, userName)
+		s.Error(err)
+	})
+
+	s.Run("service not ready", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		c := &GrpcClient{}
+		_, err := c.DescribeUser(ctx, userName)
+		s.Error(err)
+		s.ErrorIs(err, ErrClientNotReady)
+	})
+}
+
+func (s *RBACSuite) TestDescribeUsers() {
+	ctx := context.Background()
+
+	s.Run("normal run", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+
+		mockResults := []*milvuspb.UserResult{
+			{
+				User: &milvuspb.UserEntity{
+					Name: "user1",
+				},
+				Roles: []*milvuspb.RoleEntity{
+					{Name: "role1"},
+					{Name: "role2"},
+				},
+			},
+			{
+				User: &milvuspb.UserEntity{
+					Name: "user2",
+				},
+				Roles: []*milvuspb.RoleEntity{
+					{Name: "role3"},
+				},
+			},
+		}
+
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Run(func(ctx context.Context, req *milvuspb.SelectUserRequest) {
+			s.True(req.GetIncludeRoleInfo())
+		}).Return(&milvuspb.SelectUserResponse{
+			Status:  &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
+			Results: mockResults,
+		}, nil)
+
+		userDescs, err := s.client.DescribeUsers(ctx)
+
+		s.NoError(err)
+		s.Len(userDescs, 2)
+
+		expectedDescs := []entity.UserDescription{
+			{
+				Name:  "user1",
+				Roles: []string{"role1", "role2"},
+			},
+			{
+				Name:  "user2",
+				Roles: []string{"role3"},
+			},
+		}
+
+		for i, desc := range userDescs {
+			s.Equal(expectedDescs[i].Name, desc.Name)
+			s.ElementsMatch(expectedDescs[i].Roles, desc.Roles)
+		}
+	})
+
+	s.Run("rpc error", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Return(nil, errors.New("mock error"))
+
+		_, err := s.client.DescribeUsers(ctx)
+		s.Error(err)
+	})
+
+	s.Run("status error", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+
+		s.mock.EXPECT().SelectUser(mock.Anything, mock.Anything).Return(&milvuspb.SelectUserResponse{
+			Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError},
+		}, nil)
+
+		_, err := s.client.DescribeUsers(ctx)
+		s.Error(err)
+	})
+
+	s.Run("service not ready", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		c := &GrpcClient{}
+		_, err := c.DescribeUsers(ctx)
+		s.Error(err)
+		s.ErrorIs(err, ErrClientNotReady)
+	})
+}
+
+func (s *RBACSuite) TestListGrant() {
+	ctx := context.Background()
+	roleName := "testRole"
+	object := "testObject"
+	objectName := "testObjectName"
+	dbName := "testDB"
+
+	s.Run("normal run", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+
+		mockResults := []*milvuspb.GrantEntity{
+			{
+				Object: &milvuspb.ObjectEntity{
+					Name: object,
+				},
+				ObjectName: objectName,
+				Role: &milvuspb.RoleEntity{
+					Name: roleName,
+				},
+				Grantor: &milvuspb.GrantorEntity{
+					User: &milvuspb.UserEntity{
+						Name: "grantorUser",
+					},
+					Privilege: &milvuspb.PrivilegeEntity{
+						Name: "testPrivilege",
+					},
+				},
+				DbName: dbName,
+			},
+		}
+
+		s.mock.EXPECT().SelectGrant(mock.Anything, mock.Anything).Run(func(ctx context.Context, req *milvuspb.SelectGrantRequest) {
+			s.Equal(req.GetEntity().GetRole().GetName(), roleName)
+			s.Equal(req.GetEntity().GetObject().GetName(), object)
+			s.Equal(req.GetEntity().GetObjectName(), objectName)
+			s.Equal(req.GetEntity().GetDbName(), dbName)
+		}).Return(&milvuspb.SelectGrantResponse{
+			Status:   &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
+			Entities: mockResults,
+		}, nil)
+
+		grants, err := s.client.ListGrant(ctx, roleName, object, objectName, dbName)
+
+		s.NoError(err)
+		s.Len(grants, 1)
+
+		expectedGrant := entity.RoleGrants{
+			Object:        object,
+			ObjectName:    objectName,
+			RoleName:      roleName,
+			GrantorName:   "grantorUser",
+			PrivilegeName: "testPrivilege",
+			DbName:        dbName,
+		}
+
+		s.Equal(expectedGrant, grants[0])
+	})
+}
+
+func (s *RBACSuite) TestListGrants() {
+	ctx := context.Background()
+	roleName := "testRole"
+	dbName := "testDB"
+
+	s.Run("normal run", func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		defer s.resetMock()
+
+		mockResults := []*milvuspb.GrantEntity{
+			{
+				Object: &milvuspb.ObjectEntity{
+					Name: "testObject",
+				},
+				ObjectName: "testObjectName",
+				Role: &milvuspb.RoleEntity{
+					Name: roleName,
+				},
+				Grantor: &milvuspb.GrantorEntity{
+					User: &milvuspb.UserEntity{
+						Name: "grantorUser",
+					},
+					Privilege: &milvuspb.PrivilegeEntity{
+						Name: "testPrivilege",
+					},
+				},
+				DbName: dbName,
+			},
+		}
+
+		s.mock.EXPECT().SelectGrant(mock.Anything, mock.Anything).Run(func(ctx context.Context, req *milvuspb.SelectGrantRequest) {
+			s.Equal(req.GetEntity().GetRole().GetName(), roleName)
+			s.Equal(req.GetEntity().GetDbName(), dbName)
+		}).Return(&milvuspb.SelectGrantResponse{
+			Status:   &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
+			Entities: mockResults,
+		}, nil)
+
+		grants, err := s.client.ListGrants(ctx, roleName, dbName)
+
+		s.NoError(err)
+		s.Len(grants, 1)
+
+		expectedGrant := entity.RoleGrants{
+			Object:        "testObject",
+			ObjectName:    "testObjectName",
+			RoleName:      roleName,
+			GrantorName:   "grantorUser",
+			PrivilegeName: "testPrivilege",
+			DbName:        dbName,
+		}
+
+		s.Equal(expectedGrant, grants[0])
+	})
+}
+
 func (s *RBACSuite) TestGrant() {
 	ctx := context.Background()
 

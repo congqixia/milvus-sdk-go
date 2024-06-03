@@ -134,10 +134,25 @@ type SearchQueryOption struct {
 	ForTuning     bool
 
 	GroupByField string
+
+	isIterator    bool
+	reduceForBest bool
 }
 
 // SearchQueryOptionFunc is a function which modifies SearchOption
 type SearchQueryOptionFunc func(option *SearchQueryOption)
+
+func withIterator() SearchQueryOptionFunc {
+	return func(option *SearchQueryOption) {
+		option.isIterator = true
+	}
+}
+
+func reduceForBest(value bool) SearchQueryOptionFunc {
+	return func(option *SearchQueryOption) {
+		option.reduceForBest = value
+	}
+}
 
 func WithForTuning() SearchQueryOptionFunc {
 	return func(option *SearchQueryOption) {
@@ -283,6 +298,8 @@ type FlushOption func(*milvuspb.FlushRequest)
 type CreateDatabaseOption func(*milvuspb.CreateDatabaseRequest)
 
 type DropDatabaseOption func(*milvuspb.DropDatabaseRequest)
+
+type DescribeDatabaseOption func(*milvuspb.DescribeDatabaseRequest)
 
 type ReplicateMessageOption func(*milvuspb.ReplicateMessageRequest)
 
