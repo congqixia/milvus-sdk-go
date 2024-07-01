@@ -102,6 +102,10 @@ type QueryIterator struct {
 // init fetches the first batch of data and put it into cache.
 // this operation could be used to check all the parameters before returning the iterator.
 func (itr *QueryIterator) init(ctx context.Context) error {
+	if itr.batchSize <= 0 {
+		return errors.New("batch size cannot less than 1")
+	}
+
 	rs, err := itr.fetchNextBatch(ctx)
 	if err != nil {
 		return err
@@ -116,15 +120,20 @@ func (itr *QueryIterator) composeIteratorExpr() string {
 	}
 
 	expr := strings.TrimSpace(itr.expr)
-	if expr != "" {
-		expr += " and "
-	}
 
 	switch itr.pkField.DataType {
 	case entity.FieldTypeInt64:
-		expr += fmt.Sprintf("%s > %d", itr.pkField.Name, itr.lastPK)
+		if len(expr) == 0 {
+			expr = fmt.Sprintf("%s > %d", itr.pkField.Name, itr.lastPK)
+		} else {
+			expr = fmt.Sprintf("(%s) and %s > %d", expr, itr.pkField.Name, itr.lastPK)
+		}
 	case entity.FieldTypeVarChar:
-		expr += fmt.Sprintf(`%s > "%s"`, itr.pkField.Name, itr.lastPK)
+		if len(expr) == 0 {
+			expr = fmt.Sprintf(`%s > "%s"`, itr.pkField.Name, itr.lastPK)
+		} else {
+			expr = fmt.Sprintf(`(%s) and %s > "%s"`, expr, itr.pkField.Name, itr.lastPK)
+		}
 	default:
 		return itr.expr
 	}

@@ -44,7 +44,7 @@ type Client interface {
 	// DropDatabase drop database with the given db name.
 	DropDatabase(ctx context.Context, dbName string, opts ...DropDatabaseOption) error
 	// AlterDatabase alter database props with given db name.
-	AlterDatabase(ctx context.Context, collName string, attrs ...entity.DatabaseAttribute) error
+	AlterDatabase(ctx context.Context, dbName string, attrs ...entity.DatabaseAttribute) error
 	DescribeDatabase(ctx context.Context, dbName string) (*entity.Database, error)
 
 	// -- collection --
@@ -52,7 +52,7 @@ type Client interface {
 	// NewCollection intializeds a new collection with pre defined attributes
 	NewCollection(ctx context.Context, collName string, dimension int64, opts ...CreateCollectionOption) error
 	// ListCollections list collections from connection
-	ListCollections(ctx context.Context) ([]*entity.Collection, error)
+	ListCollections(ctx context.Context, opts ...ListCollectionOption) ([]*entity.Collection, error)
 	// CreateCollection create collection using provided schema
 	CreateCollection(ctx context.Context, schema *entity.Schema, shardsNum int32, opts ...CreateCollectionOption) error
 	// DescribeCollection describe collection meta
@@ -134,7 +134,7 @@ type Client interface {
 	Flush(ctx context.Context, collName string, async bool, opts ...FlushOption) error
 	// FlushV2 flush collection, specified, return newly sealed segmentIds, all flushed segmentIds of the collection, seal time and error
 	// currently it is only used in milvus-backup(https://github.com/zilliztech/milvus-backup)
-	FlushV2(ctx context.Context, collName string, async bool, opts ...FlushOption) ([]int64, []int64, int64, error)
+	FlushV2(ctx context.Context, collName string, async bool, opts ...FlushOption) ([]int64, []int64, int64, map[string]msgpb.MsgPosition, error)
 	// DeleteByPks deletes entries related to provided primary keys
 	DeleteByPks(ctx context.Context, collName string, partitionName string, ids entity.Column) error
 	// Delete deletes entries match expression
@@ -214,7 +214,9 @@ type Client interface {
 	// ListResourceGroups returns list of resource group names in current Milvus instance.
 	ListResourceGroups(ctx context.Context) ([]string, error)
 	// CreateResourceGroup creates a resource group with provided name.
-	CreateResourceGroup(ctx context.Context, rgName string) error
+	CreateResourceGroup(ctx context.Context, rgName string, opts ...CreateResourceGroupOption) error
+	// UpdateResourceGroups updates resource groups with provided options.
+	UpdateResourceGroups(ctx context.Context, opts ...UpdateResourceGroupsOption) error
 	// DescribeResourceGroup returns resource groups information.
 	DescribeResourceGroup(ctx context.Context, rgName string) (*entity.ResourceGroup, error)
 	// DropResourceGroup drops the resource group with provided name.
